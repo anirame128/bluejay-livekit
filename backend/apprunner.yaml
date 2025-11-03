@@ -3,7 +3,7 @@ runtime: python311
 build:
   commands:
     build:
-      - echo "Build phase - dependencies installed in pre-run"
+      - true
 run:
   pre-run:
     - pip3 install -r requirements.txt
