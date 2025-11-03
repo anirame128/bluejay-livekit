@@ -212,3 +212,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+ecs-task-execution-trust-policy.json
+ssm-access-policy.json
+task-definition.json
+apprunner-trust-policy.json
+apprunner-ecr-trust-policy.json

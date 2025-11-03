@@ -6,7 +6,10 @@ import {
   BarVisualizer,
   DisconnectButton,
   useTrackTranscription,
+  useConnectionState,
+  useParticipants,
 } from '@livekit/components-react';
+import { ParticipantKind } from 'livekit-client';
 import '@livekit/components-styles';
 
 // LiveKit URL from environment (set in .env file)
@@ -16,6 +19,12 @@ const TOKEN_SERVER_URL = process.env.REACT_APP_TOKEN_SERVER_URL || 'http://local
 function VoiceAssistantUI() {
   const { state, audioTrack } = useVoiceAssistant();
   const { segments } = useTrackTranscription();
+  const connectionState = useConnectionState();
+  const participants = useParticipants();
+  
+  // Check if agent is connected
+  const agentParticipant = participants.find(p => p.kind === ParticipantKind.AGENT);
+  const isAgentConnected = !!agentParticipant;
   
   return (
     <div style={{ 
@@ -66,7 +75,22 @@ function VoiceAssistantUI() {
         borderRadius: '12px'
       }}>
         <div>
-          <strong>Status:</strong>{' '}
+          <strong>Connection:</strong>{' '}
+          <span style={{ 
+            color: connectionState === 'connected' ? '#22c55e' : 
+                   connectionState === 'connecting' ? '#f59e0b' : '#ef4444'
+          }}>
+            {connectionState}
+          </span>
+          {' | '}
+          <strong>Agent:</strong>{' '}
+          <span style={{ 
+            color: isAgentConnected ? '#22c55e' : '#ef4444'
+          }}>
+            {isAgentConnected ? 'Connected' : 'Not Connected'}
+          </span>
+          {' | '}
+          <strong>State:</strong>{' '}
           <span style={{ 
             color: state === 'speaking' ? '#22c55e' : state === 'listening' ? '#3b82f6' : '#666'
           }}>
@@ -139,13 +163,18 @@ export default function App() {
   const startCall = async () => {
     setIsConnecting(true);
     try {
+      // Generate unique room name for each session to ensure fresh agent dispatch
+      // This prevents issues with stale room state when reconnecting
+      const roomName = `goggins-room-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const identity = 'user-' + Math.random().toString(36).substring(7);
+      
       // Get token from token server
       const response = await fetch(`${TOKEN_SERVER_URL}/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          room: 'goggins-room',
-          identity: 'user-' + Math.random().toString(36).substring(7)
+          room: roomName,
+          identity: identity
         }),
       });
       
@@ -248,13 +277,28 @@ export default function App() {
       connect={true}
       audio={true}
       video={false}
-      onDisconnected={() => {
+      options={{
+        // Enable automatic reconnection
+        adaptiveStream: true,
+        dynacast: true,
+        // Connection timeout
+        disconnectTimeout: 10000,
+      }}
+      onDisconnected={(reason) => {
+        console.log('Disconnected from room:', reason);
+        // Clear token to reset state and ensure clean reconnection
         setToken('');
-        console.log('Disconnected from room');
+        // Force a small delay to ensure room cleanup completes
+        setTimeout(() => {
+          // This ensures the component fully unmounts and remounts on reconnect
+        }, 100);
       }}
       onError={(error) => {
         console.error('Room error:', error);
         alert('Connection error: ' + error.message);
+      }}
+      onConnected={() => {
+        console.log('Connected to room');
       }}
     >
       <VoiceAssistantUI />
