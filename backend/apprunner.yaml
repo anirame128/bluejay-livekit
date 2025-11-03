@@ -1,15 +1,14 @@
 version: 1.0
-runtime: python3
+runtime: python311
 build:
   commands:
     build:
-      - pip install -r requirements.txt
+      - echo "Build phase - dependencies installed in pre-run"
 run:
-  runtime-version: 3.11
-  command: python application.py
+  pre-run:
+    - pip3 install -r requirements.txt
+    - pip3 install gunicorn
+  command: gunicorn --bind 0.0.0.0:$PORT token_server:app
   network:
     port: 8080
     env: PORT
-  env:
-    - name: PORT
-      value: "8080"
