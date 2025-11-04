@@ -124,7 +124,10 @@ async def entrypoint(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
     
     session = AgentSession(
-        llm=groq.LLM(model="llama-3.3-70b-versatile"),
+        # Using LiveKit Inference LLM (includes function calling support)
+        # GPT-4.1 mini is fast and cost-effective with full function calling support
+        llm="openai/gpt-4.1-mini",
+        # Keep Groq STT (working well)
         stt=groq.STT(model="whisper-large-v3-turbo", detect_language=True),
         # Using LiveKit Inference TTS (included in LiveKit Cloud - no Cartesia API key needed)
         # Blake: Energetic American adult male - perfect for Goggins' motivational style
