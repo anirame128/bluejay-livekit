@@ -1,7 +1,5 @@
-import React from 'react';
 import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react';
-import MainInterface from './MainInterface';
-import { MainInterfaceStandalone } from './MainInterface';
+import MainInterface, { MainInterfaceStandalone } from './MainInterface';
 import { LIVEKIT_URL } from '../utils/config';
 
 export default function UnifiedUI({ onStartCall, onDisconnect, isConnecting, error, token }) {

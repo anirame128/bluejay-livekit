@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   useVoiceAssistant,
   BarVisualizer,
@@ -127,93 +127,52 @@ export default function MainInterface({ onDisconnect }) {
   // Check if agent is connected
   const agentParticipant = participants.find(p => p.kind === ParticipantKind.AGENT);
   const isAgentConnected = !!agentParticipant;
-  const localParticipant = room?.localParticipant;
   
   // Listen for participant events to detect when agent connects
   useEffect(() => {
     if (!room) return;
     
     const handleParticipantConnected = (participant) => {
-      console.log('Participant connected:', participant.identity, participant.kind);
       if (participant.kind === ParticipantKind.AGENT) {
         console.log('✅ Agent connected!', participant.identity);
       }
     };
     
     const handleParticipantDisconnected = (participant) => {
-      console.log('Participant disconnected:', participant.identity, participant.kind);
       if (participant.kind === ParticipantKind.AGENT) {
         console.log('❌ Agent disconnected!', participant.identity);
       }
     };
     
-    // Listen for participant events
     room.on('participantConnected', handleParticipantConnected);
     room.on('participantDisconnected', handleParticipantDisconnected);
-    
-    // Log current participants when connection state changes
-    if (connectionState === 'connected') {
-      console.log('✅ Room connected! Current participants:', participants.map(p => ({ identity: p.identity, kind: p.kind })));
-      console.log('Connection state:', connectionState);
-      console.log('Agent connected:', isAgentConnected);
-      
-      // Check if agent is already in the room
-      const existingAgent = participants.find(p => p.kind === ParticipantKind.AGENT);
-      if (existingAgent) {
-        console.log('✅ Agent already in room:', existingAgent.identity);
-      } else {
-        console.log('⏳ Waiting for agent to join... (may take 10-20 seconds for cold start)');
-      }
-    }
     
     return () => {
       room.off('participantConnected', handleParticipantConnected);
       room.off('participantDisconnected', handleParticipantDisconnected);
     };
-  }, [room, connectionState]);
-  
-  // Debug logging for transcriptions
-  useEffect(() => {
-    if (transcriptions.length > 0 && participants.length > 0) {
-      console.log('Agent participant:', agentParticipant?.identity, agentParticipant?.kind);
-      console.log('Local participant:', localParticipant?.identity);
-      console.log('All participants:', participants.map(p => ({ identity: p.identity, kind: p.kind })));
-    }
-  }, [transcriptions.length, participants.length]);
+  }, [room]);
   
   // Convert transcriptions to segments format
   const segments = Array.isArray(transcriptions) 
     ? transcriptions.map((transcription, index) => {
-        // useTranscriptions returns participantInfo with identity, not participant object
         const participantIdentity = transcription.participantInfo?.identity;
-        
-        // Find the participant object from the participants list
-        let participant = null;
-        if (participantIdentity) {
-          participant = participants.find(p => p.identity === participantIdentity);
-        }
+        const participant = participantIdentity 
+          ? participants.find(p => p.identity === participantIdentity)
+          : null;
         
         // Determine if it's an agent message
-        let isAgent = false;
-        if (participant) {
-          // Check participant kind - this is the most reliable method
-          isAgent = participant.kind === ParticipantKind.AGENT;
-        } else if (participantIdentity && agentParticipant) {
-          // Fallback: check if identity matches agent
-          isAgent = participantIdentity === agentParticipant.identity;
-        } else if (participantIdentity && localParticipant) {
-          // If identity doesn't match local, assume it's the agent
-          isAgent = participantIdentity !== localParticipant.identity;
-        }
+        const isAgent = participant 
+          ? participant.kind === ParticipantKind.AGENT
+          : participantIdentity === agentParticipant?.identity;
         
         return {
           id: transcription.id || transcription.segmentId || index,
           text: transcription.text || transcription.message || '',
-          final: transcription.final !== undefined ? transcription.final : transcription.isFinal !== undefined ? transcription.isFinal : true,
-          participant: participant,
-          participantIdentity: participantIdentity,
+          final: transcription.final ?? transcription.isFinal ?? true,
+          participant,
           timestamp: transcription.timestamp,
-          isAgent: isAgent,
+          isAgent,
         };
       })
     : [];
@@ -355,48 +314,43 @@ export default function MainInterface({ onDisconnect }) {
             </p>
           ) : (
             <>
-              {segments.map((segment) => {
-                // Use the isAgent flag we already calculated
-                const isAgent = segment.isAgent || false;
-                
-                return (
+              {segments.map((segment) => (
+                <div
+                  key={segment.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: segment.isAgent ? 'flex-start' : 'flex-end',
+                    marginBottom: '4px'
+                  }}
+                >
                   <div
-                    key={segment.id}
                     style={{
-                      display: 'flex',
-                      justifyContent: isAgent ? 'flex-start' : 'flex-end',
-                      marginBottom: '4px'
+                      maxWidth: '70%',
+                      padding: '12px 16px',
+                      borderRadius: segment.isAgent ? '18px 18px 18px 4px' : '18px 18px 4px 18px',
+                      backgroundColor: segment.isAgent ? '#fef3c7' : '#3b82f6',
+                      color: segment.isAgent ? '#92400e' : '#ffffff',
+                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
+                      wordWrap: 'break-word'
                     }}
                   >
-                    <div
-                      style={{
-                        maxWidth: '70%',
-                        padding: '12px 16px',
-                        borderRadius: isAgent ? '18px 18px 18px 4px' : '18px 18px 4px 18px',
-                        backgroundColor: isAgent ? '#fef3c7' : '#3b82f6',
-                        color: isAgent ? '#92400e' : '#ffffff',
-                        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
-                        wordWrap: 'break-word'
-                      }}
-                    >
-                      <div style={{
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        marginBottom: '4px',
-                        opacity: 0.8
-                      }}>
-                        {isAgent ? 'Goggins' : 'You'}
-                      </div>
-                      <div style={{ 
-                        lineHeight: '1.5',
-                        fontSize: '15px'
-                      }}>
-                        {segment.final ? segment.text : <em>{segment.text}</em>}
-                      </div>
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      marginBottom: '4px',
+                      opacity: 0.8
+                    }}>
+                      {segment.isAgent ? 'Goggins' : 'You'}
+                    </div>
+                    <div style={{ 
+                      lineHeight: '1.5',
+                      fontSize: '15px'
+                    }}>
+                      {segment.final ? segment.text : <em>{segment.text}</em>}
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
               <div ref={transcriptEndRef} />
             </>
           )}
