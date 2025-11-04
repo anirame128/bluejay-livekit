@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -20,6 +21,25 @@ CORS(app, resources={
         "allow_headers": ["Content-Type"]
     }
 })
+
+async def dispatch_agent(livekit_url, api_key, api_secret, room_name, agent_name, identity):
+    """Explicitly dispatch the agent via API to ensure it wakes up"""
+    try:
+        lkapi = api.LiveKitAPI(url=livekit_url, api_key=api_key, api_secret=api_secret)
+        dispatch = await lkapi.agent_dispatch.create_dispatch(
+            api.CreateAgentDispatchRequest(
+                agent_name=agent_name,
+                room=room_name,
+                metadata='{"user_id": "' + identity + '"}'
+            )
+        )
+        logger.info(f"Agent dispatch created: {dispatch}")
+        await lkapi.aclose()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to dispatch agent via API: {e}")
+        # Don't fail the token generation if dispatch fails - token-based dispatch should still work
+        return False
 
 @app.route('/token', methods=['POST'])
 def generate_token():
@@ -46,23 +66,45 @@ def generate_token():
         
         api_key = os.getenv('LIVEKIT_API_KEY')
         api_secret = os.getenv('LIVEKIT_API_SECRET')
+        livekit_url = os.getenv('LIVEKIT_URL')
         if not api_key or not api_secret:
             return jsonify({'error': 'LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set'}), 500
         
-        # Token generation - agent uses automatic dispatch (default)
-        # Automatic dispatch works best with unique room names for each session
-        # This ensures a fresh agent is dispatched each time
-        token_builder = api.AccessToken(api_key, api_secret) \
+        # Token generation with explicit agent dispatch in token
+        # This ensures the agent connects immediately when the user joins
+        # Based on LiveKit docs: https://docs.livekit.io/home/get-started/authentication/#creating-a-token-with-room-configuration
+        token = api.AccessToken(api_key, api_secret) \
             .with_identity(identity) \
             .with_name(identity) \
             .with_grants(api.VideoGrants(
                 room_join=True,
                 room=room,
-                can_publish=True,
-                can_subscribe=True,
-            ))
+            )) \
+            .with_room_config(
+                api.RoomConfiguration(
+                    agents=[
+                        api.RoomAgentDispatch(
+                            agent_name="goggins-agent",  # Must match agent_name in WorkerOptions
+                            metadata='{"user_id": "' + identity + '"}'
+                        )
+                    ],
+                ),
+            ).to_jwt()
         
-        token = token_builder.to_jwt()
+        # Also explicitly dispatch via API to ensure agent wakes up (backup mechanism)
+        # This is especially important when agent is sleeping (scaled to zero)
+        # According to LiveKit docs: https://docs.livekit.io/agents/worker/agent-dispatch/#via-api
+        if livekit_url:
+            try:
+                # Run async dispatch - this will wake up the agent if it's sleeping
+                asyncio.run(dispatch_agent(livekit_url, api_key, api_secret, room, "goggins-agent", identity))
+                logger.info(f"Agent dispatch triggered for room: {room}")
+            except Exception as e:
+                logger.warning(f"Could not dispatch agent via API (non-blocking): {e}")
+                # Continue anyway - token-based dispatch should still work
+        else:
+            logger.warning("LIVEKIT_URL not set - skipping explicit API dispatch")
+        
         return jsonify({'token': token})
     except ValueError:
         return jsonify({'error': 'Invalid input'}), 400

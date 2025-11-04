@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from pinecone import Pinecone
 from livekit.agents import Agent, AgentSession, JobContext, JobProcess, RoomInputOptions, RunContext, WorkerOptions, cli
 from livekit.agents.llm import function_tool
-from livekit.plugins import noise_cancellation, silero, groq, cartesia
+from livekit.plugins import noise_cancellation, silero, groq
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 logger = logging.getLogger("goggins-agent")
@@ -126,7 +126,9 @@ async def entrypoint(ctx: JobContext):
     session = AgentSession(
         llm=groq.LLM(model="llama-3.3-70b-versatile"),
         stt=groq.STT(model="whisper-large-v3-turbo", detect_language=True),
-        tts=cartesia.TTS(model="sonic-2", voice="98aad370-73d7-4873-8674-3ee6de6e6904"),
+        # Using LiveKit Inference TTS (included in LiveKit Cloud - no Cartesia API key needed)
+        # Blake: Energetic American adult male - perfect for Goggins' motivational style
+        tts="cartesia/sonic-3:a167e0f3-df7e-4d52-a9c3-f949145efdab",
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
         preemptive_generation=True,
@@ -142,4 +144,8 @@ async def entrypoint(ctx: JobContext):
 
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))
+    cli.run_app(WorkerOptions(
+        entrypoint_fnc=entrypoint, 
+        prewarm_fnc=prewarm,
+        agent_name="goggins-agent"  # Set agent name for explicit dispatch
+    ))
