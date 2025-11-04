@@ -1,18 +1,20 @@
 import logging
 import os
 from dotenv import load_dotenv
-from pinecone import Pinecone
-from livekit.agents import Agent, AgentSession, JobContext, JobProcess, RoomInputOptions, RunContext, WorkerOptions, cli
+
+from livekit import agents
+from livekit.agents import Agent, JobContext, JobProcess, RoomInputOptions, RunContext, WorkerOptions
 from livekit.agents.llm import function_tool
-from livekit.plugins import noise_cancellation, silero, groq
+from livekit.plugins import groq, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from pinecone import Pinecone
 
 logger = logging.getLogger("goggins-agent")
 load_dotenv(".env")
 
 
 class GogginsRAG:
-    """RAG system for querying 'Can't Hurt Me' book using Pinecone"""
+    """RAG system for querying 'Can't Hurt Me' book using Pinecone."""
     
     def __init__(self, index_name: str = "book-rag-index", namespace: str = "book_content"):
         api_key = os.getenv("PINECONE_API_KEY")
@@ -44,6 +46,7 @@ class GogginsRAG:
             return "Error retrieving information."
     
     async def async_query(self, query_text: str, top_k: int = 3) -> str:
+        """Async wrapper for query method."""
         return self.query(query_text, top_k)
 
 
@@ -55,36 +58,15 @@ except Exception as e:
 
 
 class GogginsAssistant(Agent):
-    """David Goggins-inspired accountability partner"""
+    """David Goggins-inspired accountability partner."""
     
     def __init__(self) -> None:
         super().__init__(
-            instructions="""### ROLE ###
-        You are David Goggins, the ultimate accountability partner from "Can't Hurt Me."
+            instructions="""You are David Goggins from "Can't Hurt Me."
 
-        ### CRITICAL WORKFLOW - FOLLOW EVERY TIME ###
-        This is very important: Before every response, you MUST:
-        1. Call the query_goggins_book tool with a relevant query
-        2. Wait for and read the retrieved book context
-        3. Use that context to inform your response
-        4. Respond in Goggins' voice using the retrieved information
+Before EVERY response, you MUST call the query_goggins_book tool with a relevant query, then use that context in your answer.
 
-        Take a deep breath and work through these steps for each user message.
-
-        ### PERSONALITY CONSTRAINTS ###
-        - Direct and brutally honest - call out excuses immediately
-        - Push people past mental barriers using the 40% rule
-        - Motivational but harsh - comfort is the enemy
-        - Reference specific experiences from "Can't Hurt Me"
-        - Base ALL responses on retrieved book content
-
-
-        ### RESPONSE FORMAT ###
-        - Concise (2-4 sentences max when speaking)
-        - Conversational tone (you're SPEAKING, not writing)
-        - NO emojis, asterisks, or markdown formatting
-        - Challenge with tough questions
-        - Always push toward ACTION"""
+Speak in Goggins' direct, no-excuses voice."""
         )
 
     @function_tool
@@ -100,7 +82,7 @@ class GogginsAssistant(Agent):
 
     @function_tool
     async def find_fitness_locations(self, context: RunContext, location_type: str, radius_miles: int = 5):
-        """Find nearby gym, running_trail, park, pool, or cycling_path within radius_miles"""
+        """Find nearby gym, running_trail, park, pool, or cycling_path within radius_miles."""
         # TODO: Google Places API integration
         mock = {
             "gym": ["Planet Fitness (1.2 mi)", "LA Fitness (2.1 mi)", "24 Hour Fitness (3.4 mi)"],
@@ -123,15 +105,10 @@ def prewarm(proc: JobProcess):
 async def entrypoint(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
     
-    session = AgentSession(
-        # Using LiveKit Inference LLM (includes function calling support)
-        # GPT-4.1 mini is fast and cost-effective with full function calling support
+    session = agents.AgentSession(
         llm="openai/gpt-4.1-mini",
-        # Keep Groq STT (working well)
         stt=groq.STT(model="whisper-large-v3-turbo", detect_language=True),
-        # Using LiveKit Inference TTS (included in LiveKit Cloud - no Cartesia API key needed)
-        # Blake: Energetic American adult male - perfect for Goggins' motivational style
-        tts="cartesia/sonic-3:a167e0f3-df7e-4d52-a9c3-f949145efdab",
+        tts="cartesia/sonic-3:98aad370-73d7-4873-8674-3ee6de6e6904",
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
         preemptive_generation=True,
@@ -147,8 +124,8 @@ async def entrypoint(ctx: JobContext):
 
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(
-        entrypoint_fnc=entrypoint, 
+    agents.cli.run_app(WorkerOptions(
+        entrypoint_fnc=entrypoint,
         prewarm_fnc=prewarm,
-        agent_name="goggins-agent"  # Set agent name for explicit dispatch
+        agent_name="goggins-agent"
     ))

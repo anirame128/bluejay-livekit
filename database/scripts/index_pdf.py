@@ -1,14 +1,15 @@
 import os
 import re
 import time
-from typing import List, Dict
-from pypdf import PdfReader
+from typing import Any, Dict, List
+
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from pinecone.exceptions import PineconeException
+from pypdf import PdfReader
 
 
-def extract_text_from_pdf(pdf_path: str) -> List[Dict[str, any]]:
+def extract_text_from_pdf(pdf_path: str) -> List[Dict[str, Any]]:
     """Extract text from all pages of a PDF file."""
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
@@ -22,7 +23,7 @@ def extract_text_from_pdf(pdf_path: str) -> List[Dict[str, any]]:
                 pages_data.append({"page_num": page_num, "text": text})
         return pages_data
     except Exception as e:
-        raise Exception(f"Error reading PDF {pdf_path}: {str(e)}")
+        raise RuntimeError(f"Error reading PDF {pdf_path}") from e
 
 
 def _split_text_into_chunks(text: str, chunk_size: int, overlap: int) -> List[str]:
@@ -65,11 +66,11 @@ def _split_text_into_chunks(text: str, chunk_size: int, overlap: int) -> List[st
 
 
 def chunk_text(
-    pages_data: List[Dict[str, any]], 
-    chunk_size: int = 1000, 
+    pages_data: List[Dict[str, Any]],
+    chunk_size: int = 1000,
     overlap: int = 200,
     source_file: str = "book.pdf"
-) -> List[Dict[str, any]]:
+) -> List[Dict[str, Any]]:
     """Split text from multiple pages into semantically meaningful chunks."""
     chunks = []
     chunk_id = 1
@@ -124,13 +125,16 @@ def batch_upsert(index, namespace, records, batch_size=96):
         time.sleep(0.1)
 
 
-def index_pdf(pdf_path="../data/book.pdf", index_name="book-rag-index", namespace="book_content"):
+def index_pdf(
+    pdf_path: str = "../data/book.pdf",
+    index_name: str = "book-rag-index",
+    namespace: str = "book_content"
+):
     """Extract, chunk, and index PDF into Pinecone.
     
     Note: Running this multiple times will NOT create duplicates.
     Records with the same _id will be updated/replaced (upsert behavior).
     """
-    # Try loading .env from current directory or parent
     script_dir = os.path.dirname(os.path.abspath(__file__))
     backend_dir = os.path.dirname(script_dir)
     
@@ -140,14 +144,11 @@ def index_pdf(pdf_path="../data/book.pdf", index_name="book-rag-index", namespac
         ".env"
     ]
     
-    loaded = False
     for env_path in env_paths:
         if os.path.exists(env_path):
             load_dotenv(env_path)
-            loaded = True
             break
-    
-    if not loaded:
+    else:
         load_dotenv()
     
     api_key = os.getenv("PINECONE_API_KEY")

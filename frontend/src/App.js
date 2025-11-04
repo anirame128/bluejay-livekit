@@ -12,11 +12,9 @@ export default function App() {
     setIsConnecting(true);
     setConnectionError(null);
     try {
-      // Generate unique room name for each session to ensure fresh agent dispatch
       const roomName = `goggins-room-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      const identity = 'user-' + Math.random().toString(36).substring(7);
+      const identity = `user-${Math.random().toString(36).substring(7)}`;
       
-      // Get token from token server
       const response = await fetch(`${TOKEN_SERVER_URL}/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -31,7 +29,7 @@ export default function App() {
       }
       
       const data = await response.json();
-      setToken(data.token);
+      setToken(data.participant_token);
     } catch (error) {
       console.error('Failed to connect:', error);
       setConnectionError(`Failed to connect. Make sure the token server is running at ${TOKEN_SERVER_URL}.`);

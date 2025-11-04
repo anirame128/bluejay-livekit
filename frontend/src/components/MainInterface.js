@@ -124,34 +124,7 @@ export default function MainInterface({ onDisconnect }) {
   const participants = useParticipants();
   const room = useRoomContext();
   
-  // Check if agent is connected
-  const agentParticipant = participants.find(p => p.kind === ParticipantKind.AGENT);
-  const isAgentConnected = !!agentParticipant;
-  
-  // Listen for participant events to detect when agent connects
-  useEffect(() => {
-    if (!room) return;
-    
-    const handleParticipantConnected = (participant) => {
-      if (participant.kind === ParticipantKind.AGENT) {
-        console.log('✅ Agent connected!', participant.identity);
-      }
-    };
-    
-    const handleParticipantDisconnected = (participant) => {
-      if (participant.kind === ParticipantKind.AGENT) {
-        console.log('❌ Agent disconnected!', participant.identity);
-      }
-    };
-    
-    room.on('participantConnected', handleParticipantConnected);
-    room.on('participantDisconnected', handleParticipantDisconnected);
-    
-    return () => {
-      room.off('participantConnected', handleParticipantConnected);
-      room.off('participantDisconnected', handleParticipantDisconnected);
-    };
-  }, [room]);
+  const isAgentConnected = participants.some(p => p.kind === ParticipantKind.AGENT);
   
   // Convert transcriptions to segments format
   const segments = Array.isArray(transcriptions) 
@@ -161,13 +134,10 @@ export default function MainInterface({ onDisconnect }) {
           ? participants.find(p => p.identity === participantIdentity)
           : null;
         
-        // Determine if it's an agent message
-        const isAgent = participant 
-          ? participant.kind === ParticipantKind.AGENT
-          : participantIdentity === agentParticipant?.identity;
+        const isAgent = participant?.kind === ParticipantKind.AGENT;
         
         return {
-          id: transcription.id || transcription.segmentId || index,
+          id: transcription.id || transcription.segmentId || `transcript-${index}`,
           text: transcription.text || transcription.message || '',
           final: transcription.final ?? transcription.isFinal ?? true,
           participant,

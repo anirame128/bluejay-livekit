@@ -3,7 +3,6 @@ import MainInterface, { MainInterfaceStandalone } from './MainInterface';
 import { LIVEKIT_URL } from '../utils/config';
 
 export default function UnifiedUI({ onStartCall, onDisconnect, isConnecting, error, token }) {
-  // If we have a token, wrap in LiveKitRoom
   if (token) {
     return (
       <LiveKitRoom
@@ -37,9 +36,6 @@ export default function UnifiedUI({ onStartCall, onDisconnect, isConnecting, err
             console.log('Recoverable connection error (retrying):', errorMessage);
           }
         }}
-        onConnected={() => {
-          console.log('Connected to room');
-        }}
       >
         <MainInterface onDisconnect={onDisconnect} />
         <RoomAudioRenderer />
@@ -47,7 +43,6 @@ export default function UnifiedUI({ onStartCall, onDisconnect, isConnecting, err
     );
   }
 
-  // Otherwise show the standalone version
   return (
     <MainInterfaceStandalone 
       onStartCall={onStartCall}
