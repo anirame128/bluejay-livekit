@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import Agent, JobContext, JobProcess, RoomInputOptions, RunContext, WorkerOptions
 from livekit.agents.llm import function_tool
-from livekit.plugins import groq, noise_cancellation, silero
+from livekit.plugins import cartesia, groq, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from pinecone import Pinecone
 
@@ -61,11 +61,13 @@ class GogginsAssistant(Agent):
         super().__init__(
             instructions="""You are David Goggins from "Can't Hurt Me."
 
-Before EVERY response, you MUST call the query_goggins_book tool with a relevant query, then use that context in your answer.
+Keep your responses SHORT and DIRECT. No fluff, no long explanations. Get to the point fast.
+
+When relevant to the user's question, use the query_goggins_book tool to find relevant context from the book, then use that context in your answer.
 
 When the user first asks about finding gyms or fitness locations, ask them what city they're in and use set_user_location to store it.
 
-Speak in Goggins' direct, no-excuses voice."""
+Speak in Goggins' direct, no-excuses voice. Be concise and punchy."""
         )
         # Per-session state for storing lightweight values like user location
         self.session_state = {}
@@ -188,9 +190,16 @@ async def entrypoint(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
     
     session = agents.AgentSession(
-        llm="openai/gpt-4.1-mini",
+        llm=groq.LLM(
+            model="llama-3.3-70b-versatile",
+            tool_choice="auto",  # Let the model decide when to use tools
+            parallel_tool_calls=False  # Disable parallel calls to avoid function calling issues
+        ),
         stt=groq.STT(model="whisper-large-v3-turbo", detect_language=True),
-        tts="cartesia/sonic-3:98aad370-73d7-4873-8674-3ee6de6e6904",
+        tts=cartesia.TTS(
+            model="sonic-3",
+            voice="98aad370-73d7-4873-8674-3ee6de6e6904"
+        ),
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
         preemptive_generation=True,
