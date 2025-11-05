@@ -37,9 +37,9 @@ The agent automatically queries the book's content before every response to ensu
 4. **User connects** to LiveKit room via WebSocket
 5. **Agent joins room** (LiveKit Cloud deployment)
 6. **Voice conversation begins**:
-   - Speech-to-Text: Groq Whisper Large V3 Turbo (via LiveKit Inference)
-   - LLM: OpenAI GPT-4.1-mini (via LiveKit Inference)
-   - Text-to-Speech: Custom David Goggins voice clone (Cartesia via LiveKit Inference)
+   - Speech-to-Text: Groq Whisper Large V3 Turbo (via Groq plugin)
+   - LLM: Groq Llama 3.3 70B Versatile (via Groq plugin)
+   - Text-to-Speech: Custom David Goggins voice clone (Cartesia plugin - custom voices require plugin)
 7. **For each user question**, agent:
    - Queries Pinecone vector database for relevant book passages
    - Reranks results using BGE reranker
@@ -118,10 +118,10 @@ The RAG system enables the agent to answer questions about specific content from
 - **Pinecone**: Vector database (Serverless)
 - **Google Places API**: Fitness location search
 
-### Model Providers (via LiveKit Inference)
-- **Groq**: STT inference (Whisper Large V3 Turbo)
-- **OpenAI**: LLM inference (GPT-4.1-mini)
-- **Cartesia**: TTS inference (Custom David Goggins voice clone)
+### Model Providers
+- **Groq**: STT inference (Whisper Large V3 Turbo) and LLM inference (Llama 3.3 70B Versatile) via Groq plugin
+- **Cartesia**: TTS inference (Custom David Goggins voice clone) via Cartesia plugin
+- **Note**: Custom Cartesia voices require the plugin (not available via LiveKit Inference). Groq models can also be used via LiveKit Inference, but this implementation uses plugins for direct API access.
 
 ### Voice Clone
 
@@ -135,7 +135,7 @@ The agent uses a custom voice clone created with the Cartesia API:
 
 ### Prerequisites
 
-- Python 3.12+ (for agent)
+- Python 3.12+ (for agent, Dockerfile uses 3.13)
 - Python 3.11+ (for backend)
 - Node.js 18+ (for frontend)
 - LiveKit Cloud account
@@ -261,7 +261,7 @@ id = "your-agent-id"
 
 2. Deploy using LiveKit CLI:
 ```bash
-livekit-cli deploy
+lk agent deploy
 ```
 
 Or deploy via LiveKit Cloud dashboard.
@@ -330,9 +330,10 @@ Update `REACT_APP_TOKEN_SERVER_URL` to point to your deployed backend.
 ### LiveKit Agent Design
 
 1. **Pipeline Configuration**:
-   - **STT**: Groq Whisper Large V3 Turbo (via LiveKit Inference) - configurable
-   - **LLM**: OpenAI GPT-4.1-mini (via LiveKit Inference) - configurable
-   - **TTS**: Custom Cartesia voice (via LiveKit Inference) - configurable
+   - **STT**: Groq Whisper Large V3 Turbo (via Groq plugin) - configurable
+   - **LLM**: Groq Llama 3.3 70B Versatile (via Groq plugin) - configurable
+   - **TTS**: Custom Cartesia voice (via Cartesia plugin) - configurable
+   - **Note**: Models are accessed via plugins for direct API control. Groq models can alternatively be used via LiveKit Inference, but custom Cartesia voices require the plugin.
    - **VAD**: Silero VAD (configurable) - lightweight, multilingual
    - **Turn Detection**: MultilingualModel (handles multiple languages)
    - **Noise Cancellation**: BVC (improves audio quality)
