@@ -2,21 +2,14 @@
 
 A RAG-enabled voice agent built with LiveKit that embodies the personality and wisdom of David Goggins from "Can't Hurt Me." This agent can have real-time voice conversations, answer questions from the book using Retrieval-Augmented Generation (RAG), and help users find nearby fitness locations.
 
+**🌐 Live Demo**: [https://bluejay-livekit.vercel.app](https://bluejay-livekit.vercel.app)
+
 ## Overview
 
 This application consists of three main components:
 - **Backend**: Flask server for LiveKit token generation (deployed on Google Cloud Run)
 - **LiveKit Agent**: Voice agent with RAG capabilities (deployed on LiveKit Cloud)
-- **Frontend**: React-based UI with real-time transcription (local/web deployment)
-
-### Frontend Features
-
-The React frontend includes all required components:
-- **"Start Call" button**: Initiates connection to LiveKit room
-- **Live transcript display**: Updates in real-time as participants speak, showing both user and agent speech
-- **"End Call" button**: Disconnects from the call and returns to initial state
-
-**Note**: PDF upload functionality is optional per requirements and not implemented in this version. The PDF is pre-indexed into Pinecone during setup.
+- **Frontend**: React-based UI with real-time transcription (deployed on [Vercel](https://bluejay-livekit.vercel.app))
 
 ### The Story
 
@@ -52,7 +45,6 @@ The agent automatically queries the book's content before every response to ensu
 
 - **LiveKit**: Real-time voice communication and agent framework
 - **LiveKit Cloud**: Server hosting (as required)
-- **LiveKit Inference**: Unified model gateway for STT, LLM, and TTS
 - **Pinecone**: Vector database for RAG (Serverless, AWS us-east-1)
 - **React**: Frontend framework with LiveKit React components
 - **Flask**: Backend token server
@@ -75,61 +67,28 @@ The RAG system enables the agent to answer questions about specific content from
    - Retrieved chunks with page numbers are passed to LLM as context
    - Agent responds using the retrieved information
 
-### Vector Database Configuration
+### RAG Configuration
 
-- **Index**: `book-rag-index`
-- **Type**: Dense embeddings
-- **Model**: `llama-text-embed-v2` (Pinecone integrated inference)
-- **Dimensions**: 1024
-- **Metric**: Cosine similarity
-- **Capacity Mode**: Serverless
-- **Region**: AWS us-east-1
-- **Namespace**: `book_content`
-- **Record Count**: 717 chunks
-
-### Chunking Strategy
-
-- **Chunk Size**: 1000 characters
-- **Overlap**: 200 characters
-- **Strategy**: 
-  - Prefers splitting at sentence boundaries
-  - Falls back to paragraph boundaries
-  - Finally splits at word boundaries
-  - Preserves page numbers for citation
-
-### Reranking
-
-- **Model**: `bge-reranker-v2-m3`
-- **Process**: Initial search returns 10 candidates, reranked to top 5
-- **Purpose**: Improves precision for chapter-specific questions
+- **Vector Database**: Pinecone Serverless (`book-rag-index`, namespace `book_content`)
+- **Embedding Model**: `llama-text-embed-v2` (Pinecone integrated inference, 1024 dimensions)
+- **Chunking**: 1000 characters with 200 character overlap, sentence-aware splitting, preserves page numbers
+- **Reranking**: BGE reranker (`bge-reranker-v2-m3`) - initial search returns 10 candidates, reranked to top 5
+- **Record Count**: 717 chunks from "Can't Hurt Me" book
 
 ## Tools and Frameworks Used
-
-### AI/ML Tools
-- **Claude Code**: Primary coding assistant for development
-- **Cursor with MCP Server**: Integrated development environment with MCP server support for:
-  - LiveKit documentation access
-  - Pinecone documentation access
-- **Claude Chat**: Planning and deployment guidance for Google Cloud Run
-
-### Infrastructure
-- **LiveKit Cloud**: Agent hosting with LiveKit Inference
-- **Google Cloud Run**: Backend Flask server hosting
-- **Pinecone**: Vector database (Serverless)
-- **Google Places API**: Fitness location search
 
 ### Model Providers
 - **Groq**: STT inference (Whisper Large V3 Turbo) and LLM inference (Llama 3.3 70B Versatile) via Groq plugin
 - **Cartesia**: TTS inference (Custom David Goggins voice clone) via Cartesia plugin
-- **Note**: Custom Cartesia voices require the plugin (not available via LiveKit Inference). Groq models can also be used via LiveKit Inference, but this implementation uses plugins for direct API access.
+  - **Voice ID**: `98aad370-73d7-4873-8674-3ee6de6e6904`
+  - **Model**: Cartesia Sonic 3
+  - Custom voices require the plugin (not available via LiveKit Inference)
 
-### Voice Clone
-
-The agent uses a custom voice clone created with the Cartesia API:
-- **Voice ID**: `98aad370-73d7-4873-8674-3ee6de6e6904`
-- **Model**: Cartesia Sonic 3
-- **Source**: David Goggins voice recording snippet
-- **Purpose**: Provides authentic, motivational voice aligned with Goggins' personality
+### Infrastructure
+- **LiveKit Cloud**: Agent hosting
+- **Google Cloud Run**: Backend Flask server hosting
+- **Pinecone**: Vector database (Serverless, AWS us-east-1)
+- **Google Places API**: Fitness location search
 
 ## Setup Instructions
 
@@ -278,6 +237,8 @@ npm run build
 
 Update `REACT_APP_TOKEN_SERVER_URL` to point to your deployed backend.
 
+**Live Demo**: [https://bluejay-livekit.vercel.app](https://bluejay-livekit.vercel.app)
+
 ## Design Decisions and Assumptions
 
 ### Trade-offs and Limitations
@@ -329,27 +290,23 @@ Update `REACT_APP_TOKEN_SERVER_URL` to point to your deployed backend.
 
 ### LiveKit Agent Design
 
-1. **Pipeline Configuration**:
-   - **STT**: Groq Whisper Large V3 Turbo (via Groq plugin) - configurable
-   - **LLM**: Groq Llama 3.3 70B Versatile (via Groq plugin) - configurable
-   - **TTS**: Custom Cartesia voice (via Cartesia plugin) - configurable
-   - **Note**: Models are accessed via plugins for direct API control. Groq models can alternatively be used via LiveKit Inference, but custom Cartesia voices require the plugin.
-   - **VAD**: Silero VAD (configurable) - lightweight, multilingual
-   - **Turn Detection**: MultilingualModel (handles multiple languages)
-   - **Noise Cancellation**: BVC (improves audio quality)
+**Pipeline Configuration**:
+- **STT**: Groq Whisper Large V3 Turbo (via Groq plugin)
+- **LLM**: Groq Llama 3.3 70B Versatile (via Groq plugin)
+- **TTS**: Custom Cartesia voice (via Cartesia plugin)
+- **VAD**: Silero VAD - lightweight, multilingual
+- **Turn Detection**: MultilingualModel (handles multiple languages)
+- **Noise Cancellation**: BVC (improves audio quality)
 
-2. **Agent State Management**:
-   - Session state for user location (lightweight, per-session)
-   - No persistent storage (stateless design)
+**Agent Features**:
+- Session state for user location (lightweight, per-session, stateless design)
+- Graceful degradation when RAG unavailable
+- Fallback to general knowledge if vector search fails
+- Tool call error messages maintain agent personality
 
-3. **Error Handling**:
-   - Graceful degradation when RAG unavailable
-   - Fallback to general knowledge if vector search fails
-   - Tool call error messages maintain agent personality
-
-4. **Deployment**:
-   - Agent deployed on LiveKit Cloud (as required)
-   - Backend deployed on Google Cloud Run (bonus: cloud deployment)
+**Deployment**:
+- Agent deployed on LiveKit Cloud (as required)
+- Backend deployed on Google Cloud Run (bonus: cloud deployment)
 
 ## Project Structure
 
@@ -392,14 +349,6 @@ To verify RAG is working correctly, ask the agent:
 - "What was the 40% rule?"
 
 The agent should respond with specific details from the book, including page numbers when relevant.
-
-## Future Improvements
-
-1. **Caching**: Cache common RAG queries to reduce latency
-2. **Streaming RAG**: Stream retrieved context to LLM for faster responses
-3. **Multi-turn RAG**: Maintain conversation context across turns
-4. **PDF Upload**: Allow users to upload their own PDFs via frontend
-5. **Analytics**: Track RAG query performance and accuracy
 
 ## License
 
