@@ -1,22 +1,10 @@
 import os
-import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from livekit import api
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
 load_dotenv()
-
-logger.info("Starting Flask application...")
-logger.info(f"PORT environment variable: {os.getenv('PORT', '8080')}")
-logger.info(f"LIVEKIT_API_KEY present: {bool(os.getenv('LIVEKIT_API_KEY'))}")
-logger.info(f"LIVEKIT_API_SECRET present: {bool(os.getenv('LIVEKIT_API_SECRET'))}")
 
 app = Flask(__name__)
 
@@ -29,16 +17,13 @@ CORS(app, resources={
 })
 
 def _validate_room_name(room: str) -> tuple[bool, str]:
-    """Validate room name format and length."""
     if not isinstance(room, str) or not all(c.isalnum() or c in '-_.' for c in room):
         return False, 'Invalid room name'
     if len(room) > 100:
         return False, 'Room name too long'
     return True, ''
 
-
 def _validate_identity(identity: str) -> tuple[bool, str]:
-    """Validate identity format and length."""
     if not isinstance(identity, str) or not all(c.isalnum() or c in '-_' for c in identity):
         return False, 'Invalid identity'
     if len(identity) > 100:
@@ -91,9 +76,7 @@ def generate_token():
                     ],
                 ),
             ).to_jwt()
-        
-        logger.info(f"Token generated for room: {room}, identity: {identity}")
-        
+
         response = {
             'participant_token': token,
         }
@@ -102,13 +85,11 @@ def generate_token():
         
         return jsonify(response)
     except Exception as e:
-        logger.error(f"Token generation error: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/health', methods=['GET'])
 @app.route('/', methods=['GET'])
 def health():
-    """Health check endpoint for AWS App Runner."""
     return 'ok', 200
 
 application = app

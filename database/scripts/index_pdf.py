@@ -10,7 +10,6 @@ from pypdf import PdfReader
 
 
 def extract_text_from_pdf(pdf_path: str) -> List[Dict[str, Any]]:
-    """Extract text from all pages of a PDF file."""
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
     
@@ -27,7 +26,6 @@ def extract_text_from_pdf(pdf_path: str) -> List[Dict[str, Any]]:
 
 
 def _split_text_into_chunks(text: str, chunk_size: int, overlap: int) -> List[str]:
-    """Split text into chunks with overlap, preferring sentence boundaries."""
     if len(text) <= chunk_size:
         return [text]
     
@@ -71,7 +69,6 @@ def chunk_text(
     overlap: int = 200,
     source_file: str = "book.pdf"
 ) -> List[Dict[str, Any]]:
-    """Split text from multiple pages into semantically meaningful chunks."""
     chunks = []
     chunk_id = 1
     
@@ -93,7 +90,6 @@ def chunk_text(
 
 
 def exponential_backoff_retry(func, max_retries=5):
-    """Retry function with exponential backoff for transient errors."""
     for attempt in range(max_retries):
         try:
             return func()
@@ -110,15 +106,9 @@ def exponential_backoff_retry(func, max_retries=5):
 
 
 def batch_upsert(index, namespace, records, batch_size=96):
-    """Upsert records in batches respecting Pinecone limits (96 for text)."""
     total = len(records)
     for i in range(0, total, batch_size):
         batch = records[i:i + batch_size]
-        batch_num = (i // batch_size) + 1
-        total_batches = (total + batch_size - 1) // batch_size
-        
-        print(f"Upserting batch {batch_num}/{total_batches} ({len(batch)} records)...")
-        
         exponential_backoff_retry(
             lambda: index.upsert_records(namespace, batch)
         )
@@ -130,11 +120,6 @@ def index_pdf(
     index_name: str = "book-rag-index",
     namespace: str = "book_content"
 ):
-    """Extract, chunk, and index PDF into Pinecone.
-    
-    Note: Running this multiple times will NOT create duplicates.
-    Records with the same _id will be updated/replaced (upsert behavior).
-    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     backend_dir = os.path.dirname(script_dir)
     
@@ -154,45 +139,18 @@ def index_pdf(
     api_key = os.getenv("PINECONE_API_KEY")
     if not api_key:
         raise ValueError("PINECONE_API_KEY environment variable not set. Check your .env file or set it as an environment variable.")
-    
-    print(f"Extracting text from {pdf_path}...")
+
     pages = extract_text_from_pdf(pdf_path)
-    print(f"Extracted {len(pages)} pages")
-    
-    print(f"\nChunking text...")
     chunks = chunk_text(pages, chunk_size=1000, overlap=200, source_file="book.pdf")
-    print(f"Created {len(chunks)} chunks")
-    
-    print(f"\nConnecting to Pinecone...")
     pc = Pinecone(api_key=api_key)
     index = pc.Index(index_name)
-    
-    # Check if namespace already has data
-    stats = index.describe_index_stats()
-    existing_count = stats.namespaces.get(namespace, {}).get('vector_count', 0)
-    
-    if existing_count > 0:
-        print(f"Note: Namespace '{namespace}' already has {existing_count} records.")
-        print("Running again will update existing records (no duplicates will be created).\n")
-    
-    print(f"Indexing {len(chunks)} chunks into namespace '{namespace}'...")
     batch_upsert(index, namespace, chunks, batch_size=96)
-    
-    print(f"\nWaiting for indexing to complete (~5 seconds)...")
     time.sleep(5)
-    
-    stats = index.describe_index_stats()
-    final_count = stats.namespaces.get(namespace, {}).get('vector_count', 0)
-    print(f"\nIndexing complete!")
-    print(f"Total vectors in namespace '{namespace}': {final_count}")
-    
-    if existing_count > 0 and final_count == existing_count:
-        print(f"✓ All {final_count} records updated (no duplicates created).")
 
 
 if __name__ == "__main__":
     try:
         index_pdf()
     except Exception as e:
-        print(f"Error: {e}")
+        pass
 

@@ -1,0 +1,3 @@
+pinecone>=7.3.0
+python-dotenv>=1.1.1
+pypdf>=5.1.0

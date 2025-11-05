@@ -1,6 +1,4 @@
-import logging
 import os
-import traceback
 from dotenv import load_dotenv
 
 from livekit import agents
@@ -10,13 +8,10 @@ from livekit.plugins import groq, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from pinecone import Pinecone
 
-logger = logging.getLogger("goggins-agent")
 load_dotenv(".env")
 
 
 class GogginsRAG:
-    """RAG system for querying 'Can't Hurt Me' book using Pinecone."""
-    
     def __init__(self, index_name: str = "book-rag-index", namespace: str = "book_content"):
         api_key = os.getenv("PINECONE_API_KEY")
         if not api_key:
@@ -26,105 +21,160 @@ class GogginsRAG:
     
     def query(self, query_text: str, top_k: int = 5) -> str:
         try:
-            logger.info(f"Pinecone query - text: {query_text}, top_k: {top_k}, namespace: {self.namespace}")
-            
-            # Use Pinecone search with hybrid search format
             results = self.index.search(
                 namespace=self.namespace,
                 query={"top_k": top_k * 2, "inputs": {"text": query_text}},
                 rerank={"model": "bge-reranker-v2-m3", "top_n": top_k, "rank_fields": ["content"]}
             )
-            
-            # Extract hits from SearchRecordsResponse object
+
             if not (hasattr(results, 'result') and hasattr(results.result, 'hits')):
-                logger.error(f"Unexpected response structure: {type(results)}")
                 return "Error: Unexpected response structure from Pinecone."
-            
+
             hits = results.result.hits
-            logger.info(f"Found {len(hits)} hits from Pinecone")
-            
+
             if not hits:
-                logger.warning("No hits returned from Pinecone")
                 return "No relevant information found."
-            
-            # Reranking already applied, take top_k results
+
             top_hits = hits[:top_k]
-            logger.info(f"Using top {len(top_hits)} hits")
-            
+
             context_parts = []
             for hit in top_hits:
                 fields = hit.get('fields', hit.get('metadata', {}))
                 content = fields.get('content', '')
                 page_num = fields.get('page_num', 'N/A')
                 context_parts.append(f"[Page {page_num}]: {content}")
-            
-            logger.info(f"Created {len(context_parts)} context parts")
-            
+
             return "\n\n".join(context_parts) if context_parts else "No highly relevant information found."
         except Exception as e:
-            logger.error(f"RAG query error: {e}", exc_info=True)
-            print(f"\nRAG Query Error: {e}\n")
-            traceback.print_exc()
             return "Error retrieving information."
     
     async def async_query(self, query_text: str, top_k: int = 5) -> str:
-        """Async wrapper for query method."""
         return self.query(query_text, top_k)
-
 
 try:
     rag = GogginsRAG()
 except Exception as e:
-    logger.error(f"RAG init failed: {e}")
     rag = None
 
-
 class GogginsAssistant(Agent):
-    """David Goggins-inspired accountability partner."""
-    
     def __init__(self) -> None:
         super().__init__(
             instructions="""You are David Goggins from "Can't Hurt Me."
 
 Before EVERY response, you MUST call the query_goggins_book tool with a relevant query, then use that context in your answer.
 
+When the user first asks about finding gyms or fitness locations, ask them what city they're in and use set_user_location to store it.
+
 Speak in Goggins' direct, no-excuses voice."""
         )
+        # Per-session state for storing lightweight values like user location
+        self.session_state = {}
 
     @function_tool
     async def query_goggins_book(self, context: RunContext, question: str):
-        """Query 'Can't Hurt Me' for 40% rule, Hell Week, accountability mirror, cookie jar, races, SEAL training, etc."""
         if rag is None:
-            logger.warning("RAG unavailable. Using general knowledge.")
             return "RAG unavailable. Using general knowledge."
         try:
-            logger.info(f"RAG Query: {question}")
             rag_result = await rag.async_query(question, top_k=5)
-            logger.info(f"RAG Output:\n{rag_result}")
-            print(f"\n{'='*60}")
-            print(f"RAG Query: {question}")
-            print(f"{'='*60}")
-            print(f"RAG Output:\n{rag_result}")
-            print(f"{'='*60}\n")
             return f"From 'Can't Hurt Me': {rag_result}"
         except Exception as e:
-            logger.error(f"RAG error: {e}")
-            print(f"\nRAG Error: {e}\n")
             return "Error retrieving book info."
 
     @function_tool
+    async def set_user_location(self, context: RunContext, city: str, state: str = ""):
+        """Set the user's location based on city and state they mention"""
+        import googlemaps
+
+        api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+        if not api_key:
+            return "API key not configured"
+
+        try:
+            gmaps = googlemaps.Client(key=api_key)
+            location_query = f"{city}, {state}" if state else city
+
+            # Geocode the location
+            geocode_result = gmaps.geocode(location_query)
+
+            if geocode_result:
+                location = geocode_result[0]['geometry']['location']
+                lat_lng = f"{location['lat']},{location['lng']}"
+
+                # Store in agent session state
+                self.session_state["user_location"] = lat_lng
+                self.session_state["user_city"] = city
+
+                return f"Got it! Set your location to {city}. Ready to find gyms nearby!"
+            else:
+                return "Couldn't find that location. Try again?"
+
+        except Exception as e:
+            return f"Error setting location: {str(e)}"
+
+    @function_tool
     async def find_fitness_locations(self, context: RunContext, location_type: str, radius_miles: int = 5):
-        """Find nearby gym, running_trail, park, pool, or cycling_path within radius_miles."""
-        # TODO: Google Places API integration
-        mock = {
-            "gym": ["Planet Fitness (1.2 mi)", "LA Fitness (2.1 mi)", "24 Hour Fitness (3.4 mi)"],
-            "running_trail": ["Riverside Trail (0.8 mi)", "Oak Park Loop (2.3 mi)", "Forest Preserve (4.1 mi)"],
-            "park": ["Central Park (1.5 mi)", "Lincoln Park (2.2 mi)"],
-            "pool": ["Community Aquatic (1.8 mi)", "YMCA (3.2 mi)"],
-            "cycling_path": ["Bike Trail (0.5 mi)", "River Road Path (2.7 mi)"]
+        """Find fitness locations using Google Places API"""
+        import googlemaps
+        from math import radians, sin, cos, sqrt, atan2
+
+        api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+        if not api_key:
+            return "Google Places API key not configured."
+
+        # Get user's location from context or use default
+        user_location = self.session_state.get("user_location")
+
+        if not user_location:
+            return "I need your location first. What city are you in?"
+
+        # Map location types to Google Places types
+        place_type_map = {
+            "gym": "gym",
+            "running_trail": "park",
+            "park": "park",
+            "pool": "swimming_pool",
+            "cycling_path": "park"
         }
-        locations = mock.get(location_type, ["None found"])
-        return f"Found {len(locations)} {location_type}s: {', '.join(locations)}. No excuses."
+
+        place_type = place_type_map.get(location_type, "gym")
+
+        try:
+            gmaps = googlemaps.Client(key=api_key)
+            radius_meters = int(radius_miles * 1609.34)
+
+            places_result = gmaps.places_nearby(
+                location=user_location,
+                radius=radius_meters,
+                type=place_type
+            )
+
+            if not places_result.get('results'):
+                return f"No {location_type}s found within {radius_miles} miles. Time to expand your search or make your own gym!"
+
+            locations = []
+            for place in places_result['results'][:5]:
+                name = place.get('name', 'Unknown')
+
+                place_lat = place['geometry']['location']['lat']
+                place_lng = place['geometry']['location']['lng']
+                user_lat, user_lng = map(float, user_location.split(','))
+
+                # Haversine formula
+                R = 3959
+                lat1, lon1, lat2, lon2 = map(radians, [user_lat, user_lng, place_lat, place_lng])
+                dlat = lat2 - lat1
+                dlon = lon2 - lon1
+                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                c = 2 * atan2(sqrt(a), sqrt(1-a))
+                distance = R * c
+
+                rating = place.get('rating', 'N/A')
+                locations.append(f"{name} ({distance:.1f} mi, rating: {rating})")
+
+            return f"Found {len(locations)} {location_type}s: {', '.join(locations)}. No excuses - get after it!"
+
+        except Exception as e:
+            return f"Error finding locations: {str(e)}"
 
 
 def prewarm(proc: JobProcess):
