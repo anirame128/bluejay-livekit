@@ -1,5 +1,6 @@
 import logging
 import os
+import traceback
 from dotenv import load_dotenv
 
 from livekit import agents
@@ -23,29 +24,50 @@ class GogginsRAG:
         self.index = Pinecone(api_key=api_key).Index(index_name)
         self.namespace = namespace
     
-    def query(self, query_text: str, top_k: int = 3) -> str:
+    def query(self, query_text: str, top_k: int = 5) -> str:
         try:
+            logger.info(f"Pinecone query - text: {query_text}, top_k: {top_k}, namespace: {self.namespace}")
+            
+            # Use Pinecone search with hybrid search format
             results = self.index.search(
                 namespace=self.namespace,
                 query={"top_k": top_k * 2, "inputs": {"text": query_text}},
                 rerank={"model": "bge-reranker-v2-m3", "top_n": top_k, "rank_fields": ["content"]}
             )
             
-            hits = results.get('result', {}).get('hits', [])
+            # Extract hits from SearchRecordsResponse object
+            if not (hasattr(results, 'result') and hasattr(results.result, 'hits')):
+                logger.error(f"Unexpected response structure: {type(results)}")
+                return "Error: Unexpected response structure from Pinecone."
+            
+            hits = results.result.hits
+            logger.info(f"Found {len(hits)} hits from Pinecone")
+            
             if not hits:
+                logger.warning("No hits returned from Pinecone")
                 return "No relevant information found."
             
-            context_parts = [
-                f"[Page {hit['fields'].get('page_num', 'N/A')}]: {hit['fields']['content']}"
-                for hit in hits if hit['_score'] > 0.5
-            ]
+            # Reranking already applied, take top_k results
+            top_hits = hits[:top_k]
+            logger.info(f"Using top {len(top_hits)} hits")
+            
+            context_parts = []
+            for hit in top_hits:
+                fields = hit.get('fields', hit.get('metadata', {}))
+                content = fields.get('content', '')
+                page_num = fields.get('page_num', 'N/A')
+                context_parts.append(f"[Page {page_num}]: {content}")
+            
+            logger.info(f"Created {len(context_parts)} context parts")
             
             return "\n\n".join(context_parts) if context_parts else "No highly relevant information found."
         except Exception as e:
-            logger.error(f"RAG query error: {e}")
+            logger.error(f"RAG query error: {e}", exc_info=True)
+            print(f"\nRAG Query Error: {e}\n")
+            traceback.print_exc()
             return "Error retrieving information."
     
-    async def async_query(self, query_text: str, top_k: int = 3) -> str:
+    async def async_query(self, query_text: str, top_k: int = 5) -> str:
         """Async wrapper for query method."""
         return self.query(query_text, top_k)
 
@@ -73,11 +95,21 @@ Speak in Goggins' direct, no-excuses voice."""
     async def query_goggins_book(self, context: RunContext, question: str):
         """Query 'Can't Hurt Me' for 40% rule, Hell Week, accountability mirror, cookie jar, races, SEAL training, etc."""
         if rag is None:
+            logger.warning("RAG unavailable. Using general knowledge.")
             return "RAG unavailable. Using general knowledge."
         try:
-            return f"From 'Can't Hurt Me': {await rag.async_query(question, top_k=3)}"
+            logger.info(f"RAG Query: {question}")
+            rag_result = await rag.async_query(question, top_k=5)
+            logger.info(f"RAG Output:\n{rag_result}")
+            print(f"\n{'='*60}")
+            print(f"RAG Query: {question}")
+            print(f"{'='*60}")
+            print(f"RAG Output:\n{rag_result}")
+            print(f"{'='*60}\n")
+            return f"From 'Can't Hurt Me': {rag_result}"
         except Exception as e:
             logger.error(f"RAG error: {e}")
+            print(f"\nRAG Error: {e}\n")
             return "Error retrieving book info."
 
     @function_tool
