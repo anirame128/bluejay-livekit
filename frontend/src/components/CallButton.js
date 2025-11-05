@@ -1,9 +1,9 @@
-export default function CallButton({ 
-  type, // 'start' or 'end'
-  onClick, 
-  disabled, 
+export default function CallButton({
+  type,
+  onClick,
+  disabled,
   isConnecting,
-  error 
+  error
 }) {
   if (type === 'start') {
     return (
@@ -80,7 +80,6 @@ export default function CallButton({
     );
   }
 
-  // End call button
   return (
     <div style={{
       display: 'flex',

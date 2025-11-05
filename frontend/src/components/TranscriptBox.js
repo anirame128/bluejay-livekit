@@ -5,29 +5,25 @@ export default function TranscriptBox({ segments, connectionState }) {
   const scrollContainerRef = useRef(null);
   const isConnected = connectionState === 'connected';
   const wasScrollingRef = useRef(false);
-  
-  // Memoize transcript text to avoid unnecessary recalculations
+
   const transcriptText = useMemo(() => {
     return segments
       .map(segment => segment.text)
       .filter(text => text.trim().length > 0)
       .join('\n');
   }, [segments]);
-  
-  // Handle auto-scroll with user scroll detection
+
   useEffect(() => {
     if (!transcriptEndRef.current || !scrollContainerRef.current) return;
-    
+
     const container = scrollContainerRef.current;
     const isUserScrolling = container.scrollHeight - container.scrollTop - container.clientHeight > 100;
-    
-    // Only auto-scroll if user hasn't manually scrolled up
+
     if (!isUserScrolling) {
       transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [segments.length]);
-  
-  // Track scroll position to detect user scrolling
+
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     const container = scrollContainerRef.current;

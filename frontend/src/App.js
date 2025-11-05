@@ -31,7 +31,6 @@ export default function App() {
       const data = await response.json();
       setToken(data.participant_token);
     } catch (error) {
-      console.error('Failed to connect:', error);
       setConnectionError(`Failed to connect. Make sure the token server is running at ${TOKEN_SERVER_URL}.`);
     } finally {
       setIsConnecting(false);

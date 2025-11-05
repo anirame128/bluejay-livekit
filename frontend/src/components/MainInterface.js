@@ -12,7 +12,6 @@ import TranscriptBox from './TranscriptBox';
 import CallButton from './CallButton';
 import { processTranscriptSegments, getAgentState } from './TranscriptSegmentProcessor';
 
-// Standalone version (when not in LiveKitRoom)
 export function MainInterfaceStandalone({ onStartCall, onDisconnect, isConnecting, error }) {
   return (
     <div
@@ -29,13 +28,11 @@ export function MainInterfaceStandalone({ onStartCall, onDisconnect, isConnectin
         overflow: 'hidden'
       }}
     >
-      {/* Transcript Box - Top (hidden until call starts) */}
-      <TranscriptBox 
+      <TranscriptBox
         segments={[]}
         connectionState="disconnected"
       />
 
-      {/* Waveform Animation - Middle */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -52,7 +49,6 @@ export function MainInterfaceStandalone({ onStartCall, onDisconnect, isConnectin
         />
       </div>
 
-      {/* Microphone Button - Bottom */}
       <CallButton
         type="start"
         onClick={onStartCall}
@@ -64,44 +60,37 @@ export function MainInterfaceStandalone({ onStartCall, onDisconnect, isConnectin
   );
 }
 
-// Connected version (when in LiveKitRoom)
 export default function MainInterface({ onDisconnect }) {
   const transcriptions = useTranscriptions();
   const connectionState = useConnectionState();
   const participants = useParticipants();
   const room = useRoomContext();
   const { state: voiceState } = useVoiceAssistant();
-  
-  // Memoize agent participant lookup
-  const agentParticipant = useMemo(() => 
+
+  const agentParticipant = useMemo(() =>
     participants.find(p => p.kind === ParticipantKind.AGENT),
     [participants]
   );
-  
-  const isAgentConnected = useMemo(() => 
+
+  const isAgentConnected = useMemo(() =>
     participants.some(p => p.kind === ParticipantKind.AGENT),
     [participants]
   );
-  
-  // Get agent state from participant attributes
+
   const agentState = useMemo(() => getAgentState(agentParticipant), [agentParticipant]);
-  
-  // Detect if user or agent is speaking
+
   const isUserSpeaking = voiceState === 'speaking';
   const isAgentSpeaking = agentState === 'speaking';
   const isActive = isUserSpeaking || isAgentSpeaking;
-  
-  // Process transcriptions into segments (memoized)
+
   const segments = useMemo(() => processTranscriptSegments(transcriptions), [transcriptions]);
 
-  // Memoize disconnect handler
   const handleDisconnect = useCallback(() => {
     room?.disconnect();
     onDisconnect();
   }, [room, onDisconnect]);
-  
-  // Memoize agent ready state
-  const isAgentReady = useMemo(() => 
+
+  const isAgentReady = useMemo(() =>
     isAgentConnected && !isAgentSpeaking && !isUserSpeaking,
     [isAgentConnected, isAgentSpeaking, isUserSpeaking]
   );
@@ -121,13 +110,11 @@ export default function MainInterface({ onDisconnect }) {
         overflow: 'hidden'
       }}
     >
-      {/* Transcript Box - Top */}
-      <TranscriptBox 
+      <TranscriptBox
         segments={segments}
         connectionState={connectionState}
       />
 
-      {/* Waveform Animation - Middle */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -145,7 +132,6 @@ export default function MainInterface({ onDisconnect }) {
         />
       </div>
 
-      {/* End Call Button - Bottom */}
       <CallButton
         type="end"
         onClick={handleDisconnect}

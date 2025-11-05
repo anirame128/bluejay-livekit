@@ -2,16 +2,14 @@ import { useEffect, useState, useMemo } from 'react';
 
 export default function WaveformAnimation({ isActive, isUserSpeaking, isAgentSpeaking, isConnected, isAgentReady }) {
   const numBars = 35;
-  const [heights, setHeights] = useState(() => 
+  const [heights, setHeights] = useState(() =>
     Array.from({ length: numBars }, () => Math.random() * 10 + 5)
   );
-  
-  // Memoize bars array to avoid recreating on every render
+
   const bars = useMemo(() => Array.from({ length: numBars }, (_, i) => i), []);
-  
+
   useEffect(() => {
     if (!isActive) {
-      // Reset to low heights when not active
       setHeights(Array.from({ length: numBars }, () => Math.random() * 20 + 15));
       return;
     }
@@ -22,8 +20,8 @@ export default function WaveformAnimation({ isActive, isUserSpeaking, isAgentSpe
         const minHeight = isUserSpeaking ? 40 : 30;
         return Math.random() * baseHeight + minHeight;
       }));
-    }, 100); // Update every 100ms for smooth animation
-    
+    }, 100);
+
     return () => clearInterval(interval);
   }, [isActive, isUserSpeaking, isAgentSpeaking, numBars]);
   
